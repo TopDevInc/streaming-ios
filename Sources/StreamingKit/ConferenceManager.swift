@@ -9,48 +9,47 @@ import LiveKit
 import Observation
 
 @Observable public class ConferenceManager {
-    private var room: Room?
-    private var localParticipant: LocalParticipant? { room?.localParticipant }
+    @MainActor public static let shared = ConferenceManager()
+    private init() {}
+    
+    private var room = Room()
+    private var localParticipant: LocalParticipant? { room.localParticipant }
+    
+    public enum Role {
+           case provider   // uses video and audio
+           case observer   // uses audio only
+       }
+
     
     
-    
-    
-    func printJoke() {
+    public func printJoke() {
+        
         print("Life is short, use StreamingKit")
     }
-    public func connect(to url: String, token: String) async throws {
+    
+    
+    public func connect(to url: String, token: String, as role: Role) async throws {
           let options = RoomOptions(
-              defaultCameraCaptureOptions: CameraCaptureOptions(position: .front),
+              defaultCameraCaptureOptions: CameraCaptureOptions(position: .front), // no camera for Touristee
               defaultAudioCaptureOptions: AudioCaptureOptions()
           )
-
-          try await room?.connect(
-              url: url,
-              token: token,
-              roomOptions: options
-          )
-
-          try await configurePermissions()
+        
+        do {
+            try await room.connect(url: url, token: token, roomOptions: options)
+            try await configurePermissions()
+        } catch (let error) {
+            throw error
+        }
+        
       }
 
     
     
-//    func connect(to url: String, token: String) async throws {
-//        let config = RoomOptions(
-//            defaultCameraCaptureOptions: CameraCaptureOptions(position: .front),
-//            defaultAudioCaptureOptions: AudioCaptureOptions()
-//        )
-//        
-//        room = try await LiveKit.connect(url: url, token: token)
-//        
-//        configurePermissions()
-//    }
-    
     private func configurePermissions() async throws {
         
         do {
-            try await room?.localParticipant.setMicrophone(enabled: true)
-            try await room?.localParticipant.setCamera(enabled: true)
+            try await room.localParticipant.setMicrophone(enabled: true)
+            try await room.localParticipant.setCamera(enabled: true)
         } catch(let error) {
             throw error
         }
@@ -59,8 +58,8 @@ import Observation
         
     }
     
-    func disconnect() async {
-        try? await room?.disconnect()
+    public func disconnect() async throws {
+            await room.disconnect()
     }
     
     
