@@ -8,65 +8,6 @@
 import LiveKit
 import Observation
 
-//@Observable public class ConferenceManager {
-//    @MainActor public static let shared = ConferenceManager()
-//    private init() {}
-//    
-//    private var room = Room()
-//    private var localParticipant: LocalParticipant? { room.localParticipant }
-//    
-//    public enum Role {
-//           case provider   // uses video and audio
-//           case observer   // uses audio only
-//       }
-//
-//    
-//    
-//    public func printJoke() {
-//        
-//        print("Life is short, use StreamingKit")
-//    }
-//    
-//    
-//    public func connect(to url: String, token: String, as role: Role) async throws {
-//          let options = RoomOptions(
-//              defaultCameraCaptureOptions: CameraCaptureOptions(position: .front), // no camera for Touristee
-//              defaultAudioCaptureOptions: AudioCaptureOptions()
-//          )
-//        
-//        do {
-//            try await room.connect(url: url, token: token, roomOptions: options)
-//            try await configurePermissions()
-//        } catch (let error) {
-//            throw error
-//        }
-//        
-//      }
-//
-//    
-//    
-//    private func configurePermissions() async throws {
-//        
-//        do {
-//            try await room.localParticipant.setMicrophone(enabled: true)
-//            try await room.localParticipant.setCamera(enabled: true)
-//        } catch(let error) {
-//            throw error
-//        }
-//        
-//        
-//        
-//    }
-//    
-//    public func disconnect() async throws {
-//            await room.disconnect()
-//    }
-//    
-//    
-//    
-//}
-
-
 
 @Observable public class ConferenceManager {
     @MainActor public static let shared = ConferenceManager()
@@ -74,14 +15,22 @@ import Observation
 
     private var room = Room()
     private var localParticipant: LocalParticipant? { room.localParticipant }
-    public private(set) var videoTrack: VideoTrack?
+    public private(set) var providerVideoTrack: VideoTrack?
+    public private(set) var observerVideoTrack: VideoTrack?
+    private(set) var myRole: Role = .observer
 
     public enum Role {
         case provider
         case observer
     }
 
-    public func connect(to url: String, token: String, as role: Role) async throws {
+    public func register(role: Role) {
+        //this must be run on App to state who is joining the Conference -Alejandro
+        myRole = role
+    }
+    
+    public func connect(to url: String, token: String) async throws {
+        
         let options = RoomOptions(
             defaultCameraCaptureOptions: CameraCaptureOptions(position: .front),
             defaultAudioCaptureOptions: AudioCaptureOptions()
@@ -91,9 +40,24 @@ import Observation
             try await room.connect(url: url, token: token, roomOptions: options)
             try await configurePermissions()
 
-            if let track = room.localParticipant.videoTracks.first?.track {
-                videoTrack = track as? VideoTrack
+            switch myRole {
+                
+            case .provider:
+                if let track = room.remoteParticipants.first?.value.videoTracks.first?.track {
+                    observerVideoTrack = track as? VideoTrack
+                }
+                if let track = room.localParticipant.videoTracks.first?.track {
+                    providerVideoTrack = track as? VideoTrack
+                }
+            case .observer:
+                if let track = room.remoteParticipants.first?.value.videoTracks.first?.track {
+                    providerVideoTrack = track as? VideoTrack
+                }
+                if let track = room.localParticipant.videoTracks.first?.track {
+                    observerVideoTrack = track as? VideoTrack
+                }
             }
+            
 
         } catch {
             throw error
@@ -101,16 +65,34 @@ import Observation
     }
 
     private func configurePermissions() async throws {
-        do {
-            try await room.localParticipant.setMicrophone(enabled: true)
-            try await room.localParticipant.setCamera(enabled: true)
-        } catch {
-            throw error
-        }
+        try await room.localParticipant.setMicrophone(enabled: true)
+        try await room.localParticipant.setCamera(enabled: (myRole == .provider))
     }
 
+    
+    @MainActor
+    public func setMicrophone(enabled: Bool) async throws {
+        try await room.localParticipant.setMicrophone(enabled: enabled)
+    }
+
+    @MainActor
+    public func setCamera(enabled: Bool) async throws {
+        try await room.localParticipant.setCamera(enabled: enabled)
+        switch myRole {
+        case .provider:
+            providerVideoTrack = enabled ? (room.localParticipant.videoTracks.first?.track as? VideoTrack) : nil
+            
+        case .observer:
+            observerVideoTrack = enabled ? (room.localParticipant.videoTracks.first?.track as? VideoTrack) : nil
+        }
+        
+        
+    }
+    
+    
     public func disconnect() async throws {
         await room.disconnect()
-        videoTrack = nil
+        providerVideoTrack = nil
+        observerVideoTrack = nil
     }
 }
