@@ -7,6 +7,7 @@
 
 import LiveKit
 import Observation
+import AVFoundation
 
 
 @Observable public class ConferenceManager {
@@ -16,57 +17,70 @@ import Observation
     private var room = Room()
     private var localParticipant: LocalParticipant? { room.localParticipant }
     public private(set) var providerVideoTrack: VideoTrack?
-    public private(set) var observerVideoTrack: VideoTrack?
-    private(set) var myRole: Role = .observer
-
+    public private(set) var clientVideoTrack: VideoTrack?
+    private(set) var myRole: Role = .client
+    
     public enum Role {
         case provider
-        case observer
+        case client
     }
 
     public func register(role: Role) {
-        //this must be run on App to state who is joining the Conference -Alejandro
+        //this must be run on client App to state who is joining the Conference -Alejandro
         myRole = role
     }
     
-    public func connect(to url: String, token: String) async throws {
-        
+    
+    public func connect(to url: String, token: String, muted: Bool, videoEnabled: Bool, cameraPosition: AVCaptureDevice.Position) async throws {
         let options = RoomOptions(
-            defaultCameraCaptureOptions: CameraCaptureOptions(position: .front),
+            defaultCameraCaptureOptions: CameraCaptureOptions(position: cameraPosition),
             defaultAudioCaptureOptions: AudioCaptureOptions()
         )
 
         do {
             try await room.connect(url: url, token: token, roomOptions: options)
-            try await configurePermissions()
+            try await configurePermissions(isMuted: muted, isCameraEnabled: videoEnabled)
 
+            
+            // Track assignment
             switch myRole {
-                
             case .provider:
                 if let track = room.remoteParticipants.first?.value.videoTracks.first?.track {
-                    observerVideoTrack = track as? VideoTrack
+                    clientVideoTrack = track as? VideoTrack
                 }
                 if let track = room.localParticipant.videoTracks.first?.track {
                     providerVideoTrack = track as? VideoTrack
                 }
-            case .observer:
+            case .client:
                 if let track = room.remoteParticipants.first?.value.videoTracks.first?.track {
                     providerVideoTrack = track as? VideoTrack
                 }
                 if let track = room.localParticipant.videoTracks.first?.track {
-                    observerVideoTrack = track as? VideoTrack
+                    clientVideoTrack = track as? VideoTrack
                 }
             }
-            
-
         } catch {
             throw error
         }
     }
+    
+    
+    public func switchCamera() async {
+        guard let videoTrack = room.localParticipant.videoTracks.first?.track as? LocalVideoTrack,
+              let capturer = videoTrack.capturer as? CameraCapturer else {
+            return
+        }
+        
+        do {
+            try await capturer.switchCameraPosition()
+        } catch {
+            print("Failed to switch camera: \(error)")
+        }
+    }
 
-    private func configurePermissions() async throws {
-        try await room.localParticipant.setMicrophone(enabled: true)
-        try await room.localParticipant.setCamera(enabled: (myRole == .provider))
+    private func configurePermissions(isMuted: Bool, isCameraEnabled: Bool) async throws {
+        try await room.localParticipant.setMicrophone(enabled: !isMuted)
+        try await room.localParticipant.setCamera(enabled: isCameraEnabled)
     }
 
     
@@ -82,8 +96,8 @@ import Observation
         case .provider:
             providerVideoTrack = enabled ? (room.localParticipant.videoTracks.first?.track as? VideoTrack) : nil
             
-        case .observer:
-            observerVideoTrack = enabled ? (room.localParticipant.videoTracks.first?.track as? VideoTrack) : nil
+        case .client:
+            clientVideoTrack = enabled ? (room.localParticipant.videoTracks.first?.track as? VideoTrack) : nil
         }
         
         
@@ -93,6 +107,6 @@ import Observation
     public func disconnect() async throws {
         await room.disconnect()
         providerVideoTrack = nil
-        observerVideoTrack = nil
+        clientVideoTrack = nil
     }
 }
