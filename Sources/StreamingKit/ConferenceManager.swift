@@ -103,16 +103,10 @@ import AVFoundation
         
     }
     
-    
-    public func disconnectProvider() async throws {
-        providerVideoTrack = nil
-        await room.disconnect()
-        
-    }
-    
+    @MainActor
     public func disconnect() async throws {
-        await room.disconnect()
         providerVideoTrack = nil
         clientVideoTrack = nil
+        await room.disconnect()
     }
 }
