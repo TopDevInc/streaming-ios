@@ -31,9 +31,9 @@ import AVFoundation
     }
     
     
-    public func connect(to url: String, token: String, muted: Bool, videoEnabled: Bool, cameraPosition: AVCaptureDevice.Position) async throws {
+    public func connect(to url: String, token: String, muted: Bool, videoEnabled: Bool, cameraPosition: CameraPosition) async throws {
         let options = RoomOptions(
-            defaultCameraCaptureOptions: CameraCaptureOptions(position: cameraPosition),
+            defaultCameraCaptureOptions: CameraCaptureOptions(position: cameraPosition.devicePosition),
             defaultAudioCaptureOptions: AudioCaptureOptions()
         )
 
