@@ -16,7 +16,7 @@ import AVFoundation
 
     private var room = Room()
     private var localParticipant: LocalParticipant? { room.localParticipant }
-    public private(set) var providerVideoTrack: VideoTrack?
+    public var providerVideoTrack: VideoTrack?
     public private(set) var clientVideoTrack: VideoTrack?
     private(set) var myRole: Role = .client
     
